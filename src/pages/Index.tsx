@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Image, FileText, Sprout, BookOpen, BarChart3, Settings, Lightbulb } from 'lucide-react';
+import { Send, Mic, Image, FileText, Sprout, BookOpen, BarChart3, Settings, Lightbulb, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import PromptSelector from '@/components/PromptSelector';
+import LessonView from '@/components/LessonView';
+import Dashboard from '@/components/Dashboard';
+import { askGemini } from '@/services/gemini';
 
 interface Message {
   id: string;
@@ -31,6 +34,8 @@ const Index = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const [showPromptSelector, setShowPromptSelector] = useState(false);
+  const [showLessonView, setShowLessonView] = useState(false);
+  const [activeTab, setActiveTab] = useState('chat');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -78,48 +83,18 @@ const Index = () => {
     setIsLoading(true);
 
     try {
-      let requestBody: any = {
-        contents: [{
-          parts: []
-        }]
-      };
+      let prompt = messageText;
+      let imageBase64: string | undefined;
 
-      // Add text if present
-      if (messageText.trim()) {
-        requestBody.contents[0].parts.push({ text: messageText });
-      }
-
-      // Add image if present
+      // Handle image analysis
       if (selectedImage) {
-        const base64Image = await convertImageToBase64(selectedImage);
-        requestBody.contents[0].parts.push({
-          inlineData: {
-            mimeType: selectedImage.type,
-            data: base64Image
-          }
-        });
-        
+        imageBase64 = await convertImageToBase64(selectedImage);
         if (!messageText.trim()) {
-          requestBody.contents[0].parts.push({ 
-            text: "As AgriTutor AI, analyze this agricultural image. Identify what's shown (crop, plant, disease, soil condition, etc.) and provide educational insights about it. Include practical farming advice if relevant." 
-          });
+          prompt = "As AgriTutor AI, analyze this agricultural image. Identify what's shown (crop, plant, disease, soil condition, etc.) and provide educational insights about it. Include practical farming advice if relevant.";
         }
       }
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyC1ubuDXowRKPPjxrOzxSDmUUgjgWcZFj4`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get response from AI');
-      }
-
-      const data = await response.json();
-      const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I couldn\'t process that request.';
+      const aiResponse = await askGemini(prompt, imageBase64);
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -156,6 +131,11 @@ const Index = () => {
     sendMessage(prompt);
   };
 
+  const handleStartLesson = (topic: string) => {
+    setInputText(`Tell me about ${topic}`);
+    setActiveTab('chat');
+  };
+
   const startVoiceInput = () => {
     toast({
       title: "Voice Input",
@@ -170,6 +150,14 @@ const Index = () => {
           onPromptSelect={handlePromptSelect}
           onClose={() => setShowPromptSelector(false)}
         />
+      </div>
+    );
+  }
+
+  if (showLessonView) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 p-4">
+        <LessonView onClose={() => setShowLessonView(false)} />
       </div>
     );
   }
@@ -199,6 +187,15 @@ const Index = () => {
                 <Lightbulb className="h-4 w-4 mr-1" />
                 Smart Prompts
               </Button>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setShowLessonView(true)}
+                className="text-green-600 hover:text-green-800"
+              >
+                <GraduationCap className="h-4 w-4 mr-1" />
+                AI Lessons
+              </Button>
               <Button variant="ghost" size="sm">
                 <Settings className="h-4 w-4" />
               </Button>
@@ -208,7 +205,7 @@ const Index = () => {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <Tabs defaultValue="chat" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3 bg-white">
             <TabsTrigger value="chat" className="flex items-center space-x-2">
               <BookOpen className="h-4 w-4" />
@@ -374,44 +371,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="dashboard" className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-green-800">Learning Progress</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">Topics Completed</span>
-                      <span className="font-semibold">5/20</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-green-600 h-2 rounded-full" style={{ width: '25%' }}></div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-green-800">Quiz Performance</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-600">85%</div>
-                  <p className="text-sm text-gray-600">Average Score</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-green-800">Study Streak</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-600">7 days</div>
-                  <p className="text-sm text-gray-600">Keep it up!</p>
-                </CardContent>
-              </Card>
-            </div>
+            <Dashboard onStartLesson={handleStartLesson} />
           </TabsContent>
 
           <TabsContent value="topics" className="mt-6">
