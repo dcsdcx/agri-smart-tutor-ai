@@ -1,11 +1,11 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Image, FileText, Sprout, BookOpen, BarChart3, Settings } from 'lucide-react';
+import { Send, Mic, Image, FileText, Sprout, BookOpen, BarChart3, Settings, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import PromptSelector from '@/components/PromptSelector';
 
 interface Message {
   id: string;
@@ -30,6 +30,7 @@ const Index = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const [showPromptSelector, setShowPromptSelector] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -62,12 +63,13 @@ const Index = () => {
     });
   };
 
-  const sendMessage = async () => {
-    if (!inputText.trim() && !selectedImage) return;
+  const sendMessage = async (customPrompt?: string) => {
+    const messageText = customPrompt || inputText;
+    if (!messageText.trim() && !selectedImage) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputText || 'Analyzing uploaded image...',
+      text: messageText || 'Analyzing uploaded image...',
       isUser: true,
       timestamp: new Date(),
     };
@@ -83,8 +85,8 @@ const Index = () => {
       };
 
       // Add text if present
-      if (inputText.trim()) {
-        requestBody.contents[0].parts.push({ text: `As AgriTutor AI, an expert agriculture tutor, please provide a comprehensive and educational response about: ${inputText}. Include practical examples relevant to farming and agriculture students.` });
+      if (messageText.trim()) {
+        requestBody.contents[0].parts.push({ text: messageText });
       }
 
       // Add image if present
@@ -97,7 +99,7 @@ const Index = () => {
           }
         });
         
-        if (!inputText.trim()) {
+        if (!messageText.trim()) {
           requestBody.contents[0].parts.push({ 
             text: "As AgriTutor AI, analyze this agricultural image. Identify what's shown (crop, plant, disease, soil condition, etc.) and provide educational insights about it. Include practical farming advice if relevant." 
           });
@@ -150,12 +152,27 @@ const Index = () => {
     }
   };
 
+  const handlePromptSelect = (prompt: string) => {
+    sendMessage(prompt);
+  };
+
   const startVoiceInput = () => {
     toast({
       title: "Voice Input",
       description: "Voice input feature coming soon!",
     });
   };
+
+  if (showPromptSelector) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 p-4">
+        <PromptSelector 
+          onPromptSelect={handlePromptSelect}
+          onClose={() => setShowPromptSelector(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50">
@@ -173,6 +190,15 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center space-x-2">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setShowPromptSelector(true)}
+                className="text-green-600 hover:text-green-800"
+              >
+                <Lightbulb className="h-4 w-4 mr-1" />
+                Smart Prompts
+              </Button>
               <Button variant="ghost" size="sm">
                 <Settings className="h-4 w-4" />
               </Button>
@@ -204,7 +230,18 @@ const Index = () => {
               <div className="lg:col-span-3">
                 <Card className="h-[600px] flex flex-col">
                   <CardHeader className="border-b border-green-100">
-                    <CardTitle className="text-green-800">AgriTutor Chat</CardTitle>
+                    <CardTitle className="text-green-800 flex items-center justify-between">
+                      AgriTutor Chat
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setShowPromptSelector(true)}
+                        className="text-green-600 border-green-200 hover:bg-green-50"
+                      >
+                        <Lightbulb className="h-4 w-4 mr-1" />
+                        Smart Prompts
+                      </Button>
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="flex-1 flex flex-col p-0">
                     {/* Messages */}
@@ -295,7 +332,7 @@ const Index = () => {
                             <Mic className="h-4 w-4 text-green-600" />
                           </Button>
                         </div>
-                        <Button onClick={sendMessage} disabled={isLoading || (!inputText.trim() && !selectedImage)} className="bg-green-600 hover:bg-green-700">
+                        <Button onClick={() => sendMessage()} disabled={isLoading || (!inputText.trim() && !selectedImage)} className="bg-green-600 hover:bg-green-700">
                           <Send className="h-4 w-4" />
                         </Button>
                       </div>
