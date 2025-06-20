@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Image, FileText, Sprout, BookOpen, BarChart3, Settings, Lightbulb, GraduationCap } from 'lucide-react';
+import { Send, Mic, Image, FileText, Sprout, BookOpen, BarChart3, Settings, Lightbulb, GraduationCap, MicOff, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
+import { usePDFUpload } from '@/hooks/usePDFUpload';
 import PromptSelector from '@/components/PromptSelector';
 import LessonView from '@/components/LessonView';
 import Dashboard from '@/components/Dashboard';
@@ -36,6 +38,9 @@ const Index = () => {
   const [showPromptSelector, setShowPromptSelector] = useState(false);
   const [showLessonView, setShowLessonView] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
+  const { isListening, startListening } = useVoiceInput();
+  const { isProcessing, processPDF } = usePDFUpload();
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -66,6 +71,51 @@ const Index = () => {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleVoiceInput = () => {
+    if (isListening) {
+      toast({
+        title: "Voice Input Active",
+        description: "Already listening for voice input...",
+      });
+      return;
+    }
+
+    startListening((transcript) => {
+      setInputText(transcript);
+      toast({
+        title: "Voice Captured",
+        description: `Captured: "${transcript}"`,
+      });
+    });
+  };
+
+  const handlePDFUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast({
+        title: "Invalid File Type",
+        description: "Please upload a PDF file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const pdfText = await processPDF(file);
+      const prompt = `As AgriTutor AI, analyze this agricultural document and provide key insights: ${pdfText.substring(0, 2000)}...`;
+      setInputText(prompt);
+      
+      toast({
+        title: "PDF Ready",
+        description: "PDF content has been prepared for analysis.",
+      });
+    } catch (error) {
+      console.error('Error processing PDF:', error);
+    }
   };
 
   const sendMessage = async (customPrompt?: string) => {
@@ -293,16 +343,28 @@ const Index = () => {
                           </Button>
                         </div>
                       )}
+                      
+                      {isListening && (
+                        <div className="mb-3 p-2 bg-blue-50 rounded-lg flex items-center justify-between">
+                          <span className="text-sm text-blue-700 flex items-center">
+                            <Mic className="h-4 w-4 mr-2 animate-pulse" />
+                            Listening for voice input...
+                          </span>
+                        </div>
+                      )}
+
                       <div className="flex space-x-2">
                         <div className="flex-1 flex space-x-2">
                           <Input
                             value={inputText}
                             onChange={(e) => setInputText(e.target.value)}
                             onKeyPress={handleKeyPress}
-                            placeholder="Ask about crops, soil, diseases, or upload an image..."
+                            placeholder="Ask about crops, soil, diseases, or upload an image/PDF..."
                             className="flex-1"
                             disabled={isLoading}
                           />
+                          
+                          {/* Hidden file inputs */}
                           <input
                             type="file"
                             ref={fileInputRef}
@@ -310,26 +372,61 @@ const Index = () => {
                             accept="image/*"
                             className="hidden"
                           />
+                          <input
+                            type="file"
+                            ref={pdfInputRef}
+                            onChange={handlePDFUpload}
+                            accept=".pdf"
+                            className="hidden"
+                          />
+                          
+                          {/* Input buttons */}
                           <Button
                             variant="outline"
                             size="icon"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={isLoading}
                             className="border-green-200 hover:bg-green-50"
+                            title="Upload Image"
                           >
                             <Image className="h-4 w-4 text-green-600" />
                           </Button>
+                          
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={startVoiceInput}
-                            disabled={isLoading}
+                            onClick={() => pdfInputRef.current?.click()}
+                            disabled={isLoading || isProcessing}
                             className="border-green-200 hover:bg-green-50"
+                            title="Upload PDF"
                           >
-                            <Mic className="h-4 w-4 text-green-600" />
+                            {isProcessing ? (
+                              <Upload className="h-4 w-4 text-green-600 animate-spin" />
+                            ) : (
+                              <FileText className="h-4 w-4 text-green-600" />
+                            )}
+                          </Button>
+                          
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={handleVoiceInput}
+                            disabled={isLoading}
+                            className={`border-green-200 hover:bg-green-50 ${isListening ? 'bg-blue-50' : ''}`}
+                            title={isListening ? "Listening..." : "Voice Input"}
+                          >
+                            {isListening ? (
+                              <MicOff className="h-4 w-4 text-blue-600" />
+                            ) : (
+                              <Mic className="h-4 w-4 text-green-600" />
+                            )}
                           </Button>
                         </div>
-                        <Button onClick={() => sendMessage()} disabled={isLoading || (!inputText.trim() && !selectedImage)} className="bg-green-600 hover:bg-green-700">
+                        <Button 
+                          onClick={() => sendMessage()} 
+                          disabled={isLoading || (!inputText.trim() && !selectedImage)} 
+                          className="bg-green-600 hover:bg-green-700"
+                        >
                           <Send className="h-4 w-4" />
                         </Button>
                       </div>
