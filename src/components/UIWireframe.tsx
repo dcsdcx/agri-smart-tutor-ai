@@ -60,10 +60,10 @@ const UIWireframe = () => {
     </div>
   );
 
-  const MockButton = ({ children, variant = "primary" }: { children: React.ReactNode, variant?: string }) => (
+  const MockButton = ({ children, variant = "primary", className = "" }: { children: React.ReactNode, variant?: string, className?: string }) => (
     <div className={`px-4 py-2 rounded text-sm text-center ${
       variant === 'primary' ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700'
-    }`}>
+    } ${className}`}>
       {children}
     </div>
   );
